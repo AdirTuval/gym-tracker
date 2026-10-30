@@ -1,22 +1,32 @@
+import { lastBackupAt } from '../db/backup'
 import { GROUPS } from '../db/catalog'
 import { useHomeData } from '../db/queries'
+import { startWorkout } from '../db/workout'
 import { daysAgo, greeting, HEB_DAY_LETTERS, HEB_DAYS, longDate, shortMonth } from '../lib/format'
 import { useNav } from '../nav/Navigator'
+import { Elapsed } from '../ui/Elapsed'
 import { Icon } from '../ui/Icon'
-import { useToast } from '../ui/Toast'
 
 const WEEKLY_GOAL = 3
 const RING_C = 2 * Math.PI * 34
+const BACKUP_EVERY_DAYS = 14
 
 export function Home() {
   const nav = useNav()
-  const toast = useToast()
   const data = useHomeData()
   const weekCount = data?.weekCount ?? 0
   const weekDays = data?.weekDays ?? new Set<number>()
   const recent = data?.recent ?? []
   const today = new Date().getDay()
   const left = WEEKLY_GOAL - weekCount
+  const active = data?.active
+  const lastBackup = lastBackupAt()
+  const backupDue = (data?.finishedWorkouts ?? 0) > 0 && (!lastBackup || Date.now() - lastBackup > BACKUP_EVERY_DAYS * 864e5)
+
+  async function onHero() {
+    const workoutId = active?.workout.id ?? (await startWorkout())
+    nav.push('workout', { workoutId })
+  }
 
   return (
     <>
@@ -25,7 +35,7 @@ export function Home() {
           <div className="eyebrow">{longDate(Date.now())}</div>
           <div className="h-xl">{greeting()}</div>
         </div>
-        <div className="avatar">A</div>
+        <button className="icon-btn" onClick={() => nav.push('settings')} aria-label="הגדרות"><Icon name="sliders" /></button>
       </div>
 
       <div className="content">
@@ -58,22 +68,41 @@ export function Home() {
           </div>
         </section>
 
-        <button className="hero pressable" onClick={() => toast('תיעוד אימונים מגיע בשלב הבא')}>
+        <button className="hero pressable" onClick={onHero}>
           <svg className="rings" viewBox="0 0 200 200" fill="none" stroke="#0D1003" strokeWidth="10" aria-hidden="true">
             <circle cx="100" cy="100" r="40" /><circle cx="100" cy="100" r="70" /><circle cx="100" cy="100" r="100" />
           </svg>
-          <div>
-            <div className="hero-eyebrow">FULL BODY</div>
-            <div className="hero-title">התחל אימון</div>
-            <div className="hero-sub">6 קבוצות שרירים · ~60 דק׳</div>
-          </div>
-          {recent[0] && (
+          {active ? (
+            <div>
+              <div className="hero-eyebrow">אימון פעיל</div>
+              <div className="hero-title">המשך אימון</div>
+              <div className="hero-sub">{active.groups.length} מתוך 6 קבוצות · <Elapsed since={active.workout.startedAt} /></div>
+            </div>
+          ) : (
+            <div>
+              <div className="hero-eyebrow">FULL BODY</div>
+              <div className="hero-title">התחל אימון</div>
+              <div className="hero-sub">6 קבוצות שרירים · ~60 דק׳</div>
+            </div>
+          )}
+          {!active && recent[0] && (
             <div className="chip hero-chip">
               <Icon name="clock" size="sm" /> אימון אחרון {daysAgo(recent[0].workout.startedAt)}
             </div>
           )}
           <div className="hero-go"><Icon name="play" size="lg" /></div>
         </button>
+
+        {backupDue && (
+          <button className="card nav-card pressable backup-due" onClick={() => nav.push('settings')}>
+            <div className="nav-ic"><Icon name="shield" /></div>
+            <div style={{ flex: 1 }}>
+              <div className="t">{lastBackup ? `הגיבוי האחרון ${daysAgo(lastBackup)}` : 'כדאי לגבות את הנתונים'}</div>
+              <div className="s">הנתונים שמורים רק בטלפון</div>
+            </div>
+            <span className="chev"><Icon name="chevL" /></span>
+          </button>
+        )}
 
         <button className="card nav-card pressable" onClick={() => nav.push('analytics')}>
           <div className="nav-ic"><Icon name="chart" /></div>
